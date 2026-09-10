@@ -32,15 +32,15 @@
 
 ---
 
-## 🛠️ Системные требования и зависимости
+##  Системные требования и зависимости
 
-### 🐧 Для Linux систем (Ubuntu/Debian)
+###  Для Linux систем (Ubuntu/Debian)
 Перед установкой Python-пакетов необходимо установить системные графические библиотеки, так как на серверных дистрибутивах Linux отсутствует встроенный графический движок:
 ```bash
 sudo apt update && sudo apt install -y libgl1-mesa-glx libglib2.0-0
 ```
 
-### 📦 Python библиотеки
+###  Python библиотеки
 Установите зависимости с помощью пакетного менеджера `pip`:
 ```bash
 pip install flask ultralytics opencv-python deepface
