@@ -52,7 +52,7 @@ pip install flask ultralytics opencv-python deepface
 
 На площадках хакатонов часто возникают проблемы с интернетом или блокировками серверов хранения моделей. Рекомендуется скачать веса заранее:
 
-1.  **Модель лица YOLOv8:** Скачайте файл [yolov8n-face.pt](https://github.com) и положите его в корень проекта.
+1.  **Модель лица YOLOv8:** Скачайте файл [yolov8n-face.pt]([https://github.com](https://github.com/akanametov/yolo-face/releases/download/1.0.0/yolov8n-face.pt)) и положите его в корень проекта.
 2.  **Модели DeepFace:** Скачайте файлы моделей [age_model_weights.h5](https://github.com) и [facial_expression_model_weights.h5](https://github.com). Поместите их в системную директорию весов DeepFace:
     *   **Windows:** `%USERPROFILE%\.deepface\weights\`
     *   **Linux:** `~/.deepface/weights/`
