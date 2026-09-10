@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <title>Динамический Мониторинг</title>
+    <style>
+        body { font-family: Arial, sans-serif; text-align: center; background: #1e1e1e; color: white; user-select: none; }
+        .wrapper { display: inline-block; position: relative; margin-top: 10px; cursor: crosshair; }
+        img { border: 4px solid #333; border-radius: 8px; width: 850px; height: auto; display: block; }
+        #canvas-overlay { position: absolute; top: 4px; left: 4px; width: 850px; height: 478px; pointer-events: auto; }
+        #log { margin-top: 15px; font-size: 1.4em; font-weight: bold; color: #00bcff; }
+        .btn-ready { padding: 12px 25px; font-size: 16px; background: #007bff; color: white; border: none; border-radius: 5px; cursor: pointer; font-weight: bold; margin-bottom: 10px; }
+        .btn-ready.active { background: #28a745; }
+        .hint { color: #aaa; font-size: 0.9em; margin-bottom: 10px; }
+    </style>
+</head>
+<body>
+
+    <h1>Выбор зоны контроля мышкой</h1>
+    <button id="startBtn" class="btn-ready" onclick="initClient()">👉 АКТИВИРОВАТЬ СИСТЕМУ 👈</button>
+    <div class="hint">Зажмите левую кнопку мыши на видео и потяните, чтобы изменить рамку зоны контроля</div>
+
+    <div class="wrapper">
+        <img id="videoFeed" src="/video_feed" alt="Загрузка видеопотока...">
+        <!-- Прозрачный холст поверх видео для перехвата рисования -->
+        <canvas id="canvas-overlay" width="850" height="478"></canvas>
+    </div>
+    
+    <div id="log">Статус: Ожидание активации...</div>
+
+    <audio id="sound1" src="/static/1.mp3" preload="auto"></audio>
+    <audio id="sound2" src="/static/2.mp3" preload="auto"></audio>
+
+    <script>
+        const logDiv = document.getElementById('log');
+        const startBtn = document.getElementById('startBtn');
+        const canvas = document.getElementById('canvas-overlay');
+        const ctx = canvas.getContext('2d');
+        
+        let isClientReady = false;
+        let isDrawing = false;
+        let startX, startY, endX, endY;
+
+        // Фиксированные параметры разрешения сервера
+        const SERVER_W = 1280;
+        const SERVER_H = 720;
+
+        function initClient() {
+            document.getElementById('sound1').play().then(() => document.getElementById('sound1').pause());
+            document.getElementById('sound2').play().then(() => document.getElementById('sound2').pause());
+
+            isClientReady = true;
+            startBtn.innerText = "✅ ДИНАМИЧЕСКИЙ РЕЖИМ АКТИВЕН";
+            startBtn.classList.add('active');
+            logDiv.innerHTML = "Статус: Выделите рамку на видео или ожидайте детекции...";
+            
+            setInterval(checkServerEvents, 300);
+        }
+
+        // Логика рисования мышкой поверх кадра
+        canvas.addEventListener('mousedown', (e) => {
+            if (!isClientReady) return;
+            isDrawing = true;
+            const rect = canvas.getBoundingClientRect();
+            startX = e.clientX - rect.left;
+            startY = e.clientY - rect.top;
+        });
+
+        canvas.addEventListener('mousemove', (e) => {
+            if (!isDrawing) return;
+            const rect = canvas.getBoundingClientRect();
+            endX = e.clientX - rect.left;
+            endY = e.clientY - rect.top;
+
+            // Визуально перерисовываем желтую рамку в процессе выделения
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            ctx.strokeStyle = "#ffcc00";
+            ctx.lineWidth = 3;
+            ctx.strokeRect(startX, startY, endX - startX, endY - startY);
+        });
+
+        canvas.addEventListener('mouseup', () => {
+            if (!isDrawing) return;
+            isDrawing = false;
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            // Пересчитываем координаты из размеров холста (850x478) в реальное разрешение сервера (1280x720)
+            const scaleX = SERVER_W / canvas.width;
+            const scaleY = SERVER_H / canvas.height;
+
+            const serverX1 = Math.round(Math.min(startX, endX) * scaleX);
+            const serverY1 = Math.round(Math.min(startY, endY) * scaleY);
+            const serverX2 = Math.round(Math.max(startX, endX) * scaleX);
+            const serverY2 = Math.round(Math.max(startY, endY) * scaleY);
+
+            // Отправляем новые координаты зоны на сервер
+            fetch('/update_roi', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ x1: serverX1, y1: serverY1, x2: serverX2, y2: serverY2 })
+            })
+            .then(res => res.json())
+            .then(data => {
+                logDiv.innerHTML = "Статус: Зона контроля успешно обновлена!";
+                logDiv.style.color = "#00bcff";
+            })
+            .catch(err => console.error("Ошибка обновления ROI:", err));
+        });
+
+        function downloadSnapshot(base64Data, filename) {
+            const link = document.createElement('a');
+            link.href = 'data:image/jpeg;base64,' + base64Data;
+            link.download = filename;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        }
+
+        function checkServerEvents() {
+            if (!isClientReady || isDrawing) return;
+
+            fetch('/check_event')
+                .then(res => res.json())
+                .then(data => {
+                    if (data.event === 'appeared') {
+                        logDiv.innerHTML = `[${data.time}] 🟢 ЧЕЛОВЕК ВОШЕЛ В НОВУЮ ЗОНУ!`;
+                        logDiv.style.color = "#00ff00";
+                        document.getElementById('sound1').play().catch(() => {});
+                        downloadSnapshot(data.image, `vhod_${data.time}.jpg`);
+                    } 
+                    else if (data.event === 'disappeared') {
+                        logDiv.innerHTML = `[${data.time}] 🔴 ЧЕЛОВЕК ВЫШЕЛ ИЗ ЗОНЫ`;
+                        logDiv.style.color = "#ff3333";
+                        document.getElementById('sound2').play().catch(() => {});
+                        downloadSnapshot(data.image, `vyhod_${data.time}.jpg`);
+                    }
+                });
+        }
+    </script>
+</body>
+</html>
